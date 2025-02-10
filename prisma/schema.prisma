@@ -1,0 +1,60 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String    @id @default(cuid())
+  email     String    @unique
+  name      String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  settings  Settings?
+  markers   Marker[]
+  routes    Route[]
+}
+
+model Settings {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  defaultProvider String   @default("osm")
+  defaultZoom     Int      @default(13)
+  defaultCenter   Json     @db.JsonB // {lat: number, lng: number}
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model Marker {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  description String?
+  location    Json     @db.JsonB // {lat: number, lng: number}
+  icon        String?  // Icon identifier or URL
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model Route {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  description String?
+  path        Json     @db.JsonB // Array of {lat: number, lng: number}
+  style       Json?    @db.JsonB // Store styling options as JSON
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+}

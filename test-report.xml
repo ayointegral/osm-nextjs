@@ -1,0 +1,263 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testExecutions version="1">
+  <file path="/Volumes/BackupDrive/OpenStreetMap/webapp/src/components/Map/__tests__/Map.test.tsx">
+    <testCase name="Map Component should render map container with default settings" duration="40"/>
+    <testCase name="Map Component should load and apply initial settings" duration="12"/>
+    <testCase name="Map Component should handle failed settings load" duration="5"/>
+    <testCase name="Map Component should handle zoom changes" duration="1011">
+      <failure message="Error: expect(jest.fn()).toHaveBeenCalledWith(...expected)"><![CDATA[Error: expect(jest.fn()).toHaveBeenCalledWith(...expected)
+
+Expected: "/api/settings", ObjectContaining {"headers": {"Content-Type": "application/json"}, "method": "POST"}
+
+Number of calls: 0
+
+Ignored nodes: comments, script, style
+<html>
+  <head />
+  <body>
+    <div>
+      <div
+        class="relative w-full h-screen"
+      >
+        <div
+          class="absolute bottom-4 right-4 z-[1000] bg-white/95 rounded-lg shadow-lg px-3 py-1.5"
+        >
+          <span
+            class="text-sm font-medium text-gray-900"
+          >
+            Zoom: 
+            13
+          </span>
+        </div>
+        <div
+          data-testid="map-container"
+        >
+          <div
+            data-position="topright"
+            data-testid="layers-control"
+          >
+            <div
+              data-testid="base-layer"
+            />
+            <div
+              data-testid="base-layer"
+            />
+            <div
+              data-testid="base-layer"
+            />
+            <div
+              data-testid="base-layer"
+            />
+          </div>
+          <div
+            class="leaflet-control-container"
+          >
+            <div
+              class="leaflet-bottom leaflet-right"
+            />
+          </div>
+          <div
+            class="absolute bottom-5 left-5 bg-card/90 backdrop-blur-sm px-3 py-2 rounded-lg shadow-sm border z-[1000]"
+          >
+            <div
+              class="text-sm text-card-foreground"
+            >
+              <span
+                class="font-medium"
+              >
+                Zoom Level:
+              </span>
+               
+              <span
+                class="font-mono"
+              >
+                13
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
+    at toHaveBeenCalledWith (/Volumes/BackupDrive/OpenStreetMap/webapp/src/components/Map/__tests__/Map.test.tsx:161:25)
+    at runWithExpensiveErrorDiagnosticsDisabled (/Volumes/BackupDrive/OpenStreetMap/webapp/node_modules/@testing-library/dom/dist/config.js:47:12)
+    at checkCallback (/Volumes/BackupDrive/OpenStreetMap/webapp/node_modules/@testing-library/dom/dist/wait-for.js:124:77)
+    at checkRealTimersCallback (/Volumes/BackupDrive/OpenStreetMap/webapp/node_modules/@testing-library/dom/dist/wait-for.js:118:16)
+    at Timeout.task [as _onTimeout] (/Volumes/BackupDrive/OpenStreetMap/webapp/node_modules/jsdom/lib/jsdom/browser/Window.js:520:19)
+    at listOnTimeout (node:internal/timers:594:17)
+    at processTimers (node:internal/timers:529:7)]]></failure>
+    </testCase>
+    <testCase name="Map Component should handle high zoom levels correctly" duration="1010">
+      <failure message="Error: expect(received).toBe(expected) // Object.is equality"><![CDATA[Error: expect(received).toBe(expected) // Object.is equality
+
+Expected: "20"
+Received: undefined
+
+Ignored nodes: comments, script, style
+<html>
+  <head />
+  <body>
+    <div>
+      <div
+        class="relative w-full h-screen"
+      >
+        <div
+          class="absolute bottom-4 right-4 z-[1000] bg-white/95 rounded-lg shadow-lg px-3 py-1.5"
+        >
+          <span
+            class="text-sm font-medium text-gray-900"
+          >
+            Zoom: 
+            13
+          </span>
+        </div>
+        <div
+          data-testid="map-container"
+        >
+          <div
+            data-position="topright"
+            data-testid="layers-control"
+          >
+            <div
+              data-testid="base-layer"
+            />
+            <div
+              data-testid="base-layer"
+            />
+            <div
+              data-testid="base-layer"
+            />
+            <div
+              data-testid="base-layer"
+            />
+          </div>
+          <div
+            class="leaflet-control-container"
+          >
+            <div
+              class="leaflet-bottom leaflet-right"
+            />
+          </div>
+          <div
+            class="absolute bottom-5 left-5 bg-card/90 backdrop-blur-sm px-3 py-2 rounded-lg shadow-sm border z-[1000]"
+          >
+            <div
+              class="text-sm text-card-foreground"
+            >
+              <span
+                class="font-medium"
+              >
+                Zoom Level:
+              </span>
+               
+              <span
+                class="font-mono"
+              >
+                13
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
+    at toBe (/Volumes/BackupDrive/OpenStreetMap/webapp/src/components/Map/__tests__/Map.test.tsx:180:57)
+    at runWithExpensiveErrorDiagnosticsDisabled (/Volumes/BackupDrive/OpenStreetMap/webapp/node_modules/@testing-library/dom/dist/config.js:47:12)
+    at checkCallback (/Volumes/BackupDrive/OpenStreetMap/webapp/node_modules/@testing-library/dom/dist/wait-for.js:124:77)
+    at checkRealTimersCallback (/Volumes/BackupDrive/OpenStreetMap/webapp/node_modules/@testing-library/dom/dist/wait-for.js:118:16)
+    at Timeout.task [as _onTimeout] (/Volumes/BackupDrive/OpenStreetMap/webapp/node_modules/jsdom/lib/jsdom/browser/Window.js:520:19)
+    at listOnTimeout (node:internal/timers:594:17)
+    at processTimers (node:internal/timers:529:7)]]></failure>
+    </testCase>
+    <testCase name="Map Component should handle tile loading states" duration="36"/>
+    <testCase name="Map Component should handle layer changes" duration="8"/>
+    <testCase name="Map Component should handle errors gracefully" duration="5"/>
+    <testCase name="Map Component should clean up event listeners on unmount" duration="3"/>
+    <testCase name="Map Component should handle invalid settings response" duration="1005">
+      <failure message="Error: expect(jest.fn()).toHaveBeenCalledWith(...expected)"><![CDATA[Error: expect(jest.fn()).toHaveBeenCalledWith(...expected)
+
+Expected: "Failed to save settings:", Any<Error>
+
+Number of calls: 0
+
+Ignored nodes: comments, script, style
+<html>
+  <head />
+  <body>
+    <div>
+      <div
+        class="relative w-full h-screen"
+      >
+        <div
+          class="absolute bottom-4 right-4 z-[1000] bg-white/95 rounded-lg shadow-lg px-3 py-1.5"
+        >
+          <span
+            class="text-sm font-medium text-gray-900"
+          >
+            Zoom: 
+            20
+          </span>
+        </div>
+        <div
+          data-testid="map-container"
+        >
+          <div
+            data-position="topright"
+            data-testid="layers-control"
+          >
+            <div
+              data-testid="base-layer"
+            />
+            <div
+              data-testid="base-layer"
+            />
+            <div
+              data-testid="base-layer"
+            />
+            <div
+              data-testid="base-layer"
+            />
+          </div>
+          <div
+            class="leaflet-control-container"
+          >
+            <div
+              class="leaflet-bottom leaflet-right"
+            />
+          </div>
+          <div
+            class="absolute bottom-5 left-5 bg-card/90 backdrop-blur-sm px-3 py-2 rounded-lg shadow-sm border z-[1000]"
+          >
+            <div
+              class="text-sm text-card-foreground"
+            >
+              <span
+                class="font-medium"
+              >
+                Zoom Level:
+              </span>
+               
+              <span
+                class="font-mono"
+              >
+                20
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
+    at toHaveBeenCalledWith (/Volumes/BackupDrive/OpenStreetMap/webapp/src/components/Map/__tests__/Map.test.tsx:297:26)
+    at runWithExpensiveErrorDiagnosticsDisabled (/Volumes/BackupDrive/OpenStreetMap/webapp/node_modules/@testing-library/dom/dist/config.js:47:12)
+    at checkCallback (/Volumes/BackupDrive/OpenStreetMap/webapp/node_modules/@testing-library/dom/dist/wait-for.js:124:77)
+    at checkRealTimersCallback (/Volumes/BackupDrive/OpenStreetMap/webapp/node_modules/@testing-library/dom/dist/wait-for.js:118:16)
+    at Timeout.task [as _onTimeout] (/Volumes/BackupDrive/OpenStreetMap/webapp/node_modules/jsdom/lib/jsdom/browser/Window.js:520:19)
+    at listOnTimeout (node:internal/timers:594:17)
+    at processTimers (node:internal/timers:529:7)]]></failure>
+    </testCase>
+  </file>
+</testExecutions>

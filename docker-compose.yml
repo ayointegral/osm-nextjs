@@ -1,0 +1,82 @@
+services:
+  webapp:
+    build:
+      context: .
+      target: runner
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/osm_db
+      - NODE_ENV=production
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=osm_db
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 30s
+      retries: 10
+      start_period: 120s
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./prisma:/app/prisma
+    networks:
+      - osm_network
+
+  db:
+    image: postgis/postgis:15-3.3
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=osm_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - osm_network
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - nginx_cache:/var/cache/nginx:rw
+      - nginx_run:/var/run:rw
+      - nginx_logs:/var/log/nginx:rw
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    depends_on:
+      webapp:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - osm_network
+
+networks:
+  osm_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
+  nginx_cache:
+    driver: local
+  nginx_run:
+    driver: local
+  nginx_logs:
+    driver: local
