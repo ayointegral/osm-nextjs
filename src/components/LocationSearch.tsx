@@ -1,11 +1,13 @@
 import { useState, useRef } from 'react';
-import { useRouter } from 'next/navigation';
 
-export default function LocationSearch() {
+interface LocationSearchProps {
+  onSelect: (lat: number, lon: number, zoom: number) => void;
+}
+
+export default function LocationSearch({ onSelect }: LocationSearchProps) {
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const router = useRouter();
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const handleSearch = async (e: React.FormEvent) => {
@@ -34,12 +36,8 @@ export default function LocationSearch() {
 
       if (results && results[0]) {
         const { lat, lon } = results[0];
-        // Convert lat/lon to tile coordinates
         const z = 12; // Default zoom level for searched locations
-        const x = Math.floor((Number(lon) + 180) / 360 * Math.pow(2, z));
-        const y = Math.floor((1 - Math.log(Math.tan(Number(lat) * Math.PI / 180) + 1 / Math.cos(Number(lat) * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, z));
-        
-        router.push(`/osm/${z}/${x}/${y}`);
+        onSelect(Number(lat), Number(lon), z);
       } else {
         setError('No results found. Try a different search term.');
         searchInputRef.current?.focus();

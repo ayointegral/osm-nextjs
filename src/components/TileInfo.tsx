@@ -10,50 +10,71 @@ interface TileInfoProps {
 
 export default function TileInfo({ z, x, y, url }: TileInfoProps) {
   const [error, setError] = useState<string>('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [retryCount, setRetryCount] = useState(0);
 
   const bounds = getTileBounds(x, y, z);
   const scale = getApproximateScale(z);
 
   useEffect(() => {
+    setIsLoading(true);
     setError('');
     
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
 
-    fetch(url, { signal: controller.signal })
-      .then(response => {
+    const attemptFetch = async (attempt: number) => {
+      try {
+        const response = await fetch(url, { signal: controller.signal });
         if (!response.ok) {
           throw new Error(`Failed to load tile: ${response.status}`);
         }
-        return response.blob();
-      })
-      .then(blob => {
+        const blob = await response.blob();
         if (blob.size === 0) {
           throw new Error('Empty tile response');
         }
-      })
-      .catch(err => {
+        setError('');
+      } catch (error) {
+        const err = error instanceof Error ? error : new Error(String(error));
         if (err.name === 'AbortError') {
           setError('Tile request timed out');
         } else {
           console.error('Error loading tile:', err);
           setError('Failed to load tile information');
         }
-      })
-      .finally(() => {
+        
+        // Automatically retry with exponential backoff
+        if (attempt < 3) {
+          const delay = Math.min(1000 * Math.pow(2, attempt), 10000);
+          setTimeout(() => setRetryCount(c => c + 1), delay);
+          return;
+        }
+      } finally {
+        setIsLoading(false);
         clearTimeout(timeoutId);
-      });
+      }
+    };
+
+    attemptFetch(0);
 
     return () => {
       controller.abort();
       clearTimeout(timeoutId);
     };
-  }, [url]);
+  }, [url, retryCount]);
 
   if (error) {
     return (
       <div className="rounded-lg border border-destructive/50 p-4 bg-destructive/10">
-        <p className="text-sm text-destructive">{error}</p>
+        <p className="text-sm text-destructive">Retrying... {error}</p>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="rounded-lg border border-blue-50 p-4 bg-blue-50">
+        <p className="text-sm text-blue-700">Loading tile information...</p>
       </div>
     );
   }

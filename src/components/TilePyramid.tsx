@@ -62,7 +62,7 @@ export default function TilePyramid({ z, x, y }: TilePyramidProps) {
               {parentTiles.map((tile) => (
                 <Link
                   key={tile.z}
-                  href={`/osm/${tile.z}/${tile.x}/${tile.y}`}
+                  href={`/tile-viewer/${tile.z}/${tile.x}/${tile.y}`}
                   className={`block p-2 rounded hover:bg-blue-50 ${tile.z === z ? 'bg-blue-50' : ''}`}
                 >
                   <div className="flex justify-between items-center">
@@ -83,7 +83,7 @@ export default function TilePyramid({ z, x, y }: TilePyramidProps) {
               {childTiles.map((tile) => (
                 <Link
                   key={`${tile.x}-${tile.y}`}
-                  href={`/osm/${tile.z}/${tile.x}/${tile.y}`}
+                  href={`/tile-viewer/${tile.z}/${tile.x}/${tile.y}`}
                   className="p-2 rounded hover:bg-blue-50"
                 >
                   <div className="text-sm">

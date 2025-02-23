@@ -1,10 +1,16 @@
 /// <reference types="cypress" />
+import { Map as LeafletMap } from 'leaflet';
 
-interface MapWindow extends Window {
-  map: {
-    getZoom(): number;
-    getCenter(): { lat: number; lng: number };
-  };
+// Remove conflicting Window interface declaration and import the one from window.d.ts
+declare global {
+  namespace Cypress {
+    interface Chainable<Subject = any> {
+      dragMap(startX: number, startY: number, endX: number, endY: number): Chainable<void>;
+      waitForMap(): Chainable<void>;
+      checkMapState(zoom: number, center: { lat: number; lng: number }): Chainable<void>;
+      verifySettingsUpdate(callback: (settings: Record<string, unknown>) => void): Chainable<void>;
+    }
+  }
 }
 
 // @ts-expect-error - Cypress namespace issue
@@ -27,8 +33,7 @@ Cypress.Commands.add('waitForMap', () => {
 // @ts-expect-error - Cypress namespace issue
 Cypress.Commands.add('checkMapState', (expectedZoom: number, expectedCenter: { lat: number; lng: number }) => {
   return cy.window().then((win) => {
-    const typedWindow = win as unknown as MapWindow;
-    const map = typedWindow.map;
+    const map = win.map;
     const zoom = map.getZoom();
     const center = map.getCenter();
     

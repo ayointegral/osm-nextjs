@@ -136,6 +136,8 @@ export function HighZoomTileLayer({
 
   useEffect(() => {
     if (!map) return;
+    // Capture ref value at the start of the effect
+    const cache = tileCache.current;
 
     const handleZoomStart = () => {
       // Keep existing tiles during zoom transition
@@ -226,12 +228,10 @@ export function HighZoomTileLayer({
 
       // Keep tile cache for smoother transitions
       if (zoom > maxNativeZoom - 1) {
-        const cache = tileCache.current;
         cache.loading = new Set([...cache.loading]);
         cache.loaded = new Set([...cache.loaded]);
         cache.parents = new Set([...cache.parents, ...lastParentTiles.current]);
       } else {
-        const cache = tileCache.current;
         cache.loading.clear();
         cache.loaded.clear();
         cache.parents.clear();
@@ -277,7 +277,7 @@ export function HighZoomTileLayer({
         panes.tilePane.style.transform = '';
         panes.tilePane.style.filter = '';
       }
-      const cache = tileCache.current;
+      // Use captured cache value in cleanup
       cache.loading.clear();
       cache.loaded.clear();
       cache.parents.clear();

@@ -23,7 +23,10 @@ import { HighZoomTileLayer } from './HighZoomTileLayer';
 // Initialize Leaflet globals for window object
 if (typeof window !== 'undefined') {
   window.L = L;
-  window.map = undefined as unknown as L.Map;
+  const windowWithMap = window as Window & { map?: L.Map };
+  if ('map' in windowWithMap) {
+    delete windowWithMap.map;
+  }
 }
 
 /**
