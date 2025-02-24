@@ -51,10 +51,26 @@ interface TileProvider {
 
 // Available tile providers with optimized configurations
 export const tileProviders: Record<string, TileProvider> = {
+  osm_local: {
+    name: 'Local OpenStreetMap',
+    url: '/api/osm/{z}/{x}/{y}.png',
+    attribution: ' OpenStreetMap contributors',
+    maxZoom: 20,
+    minZoom: 0,
+    maxNativeZoom: 18,
+    highZoomConfig: {
+      quality: 'high',
+      progressiveLoading: true,
+      scaleMethod: 'auto',
+      preloadAdjacent: true,
+      fadeAnimation: true,
+      retryOnError: true
+    }
+  },
   osm: {
     name: 'OpenStreetMap',
     url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-    attribution: '© OpenStreetMap contributors',
+    attribution: ' OpenStreetMap contributors',
     maxZoom: 20,
     minZoom: 0,
     maxNativeZoom: 18, // Ensure smooth scaling by starting one level earlier
@@ -70,7 +86,7 @@ export const tileProviders: Record<string, TileProvider> = {
   cyclosm: {
     name: 'CyclOSM',
     url: 'https://c.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png',
-    attribution: '© CyclOSM contributors',
+    attribution: ' CyclOSM contributors',
     maxZoom: 20,
     minZoom: 0,
     maxNativeZoom: 18, // Ensure smooth scaling by starting one level earlier
@@ -86,7 +102,7 @@ export const tileProviders: Record<string, TileProvider> = {
   humanitarian: {
     name: 'Humanitarian',
     url: 'https://tile-a.openstreetmap.fr/hot/{z}/{x}/{y}.png',
-    attribution: '© HOT OSM contributors',
+    attribution: ' HOT OSM contributors',
     maxZoom: 20,
     minZoom: 0,
     maxNativeZoom: 18, // Ensure smooth scaling by starting one level earlier
@@ -102,7 +118,7 @@ export const tileProviders: Record<string, TileProvider> = {
   terrain: {
     name: 'Terrain',
     url: 'https://a.tile.opentopomap.org/{z}/{x}/{y}.png',
-    attribution: '© OpenTopoMap contributors',
+    attribution: ' OpenTopoMap contributors',
     maxZoom: 20,
     minZoom: 0,
     maxNativeZoom: 17, // Terrain data needs lower maxNativeZoom due to detail density
