@@ -1,1 +1,19 @@
-
+pipeline:
+  name: Example Pipeline
+  identifier: example_pipeline
+  projectIdentifier: default_project
+  orgIdentifier: default
+  stages:
+    - stage:
+        name: Build
+        identifier: BuildStage
+        type: CI
+        spec:
+          execution:
+            steps:
+              - step:
+                  name: Build
+                  identifier: build_step
+                  type: Run
+                  spec:
+                    command: echo "Building project"
