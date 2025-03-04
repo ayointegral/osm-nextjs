@@ -47,3 +47,4 @@ pipeline:
 
                       echo "Running tests"
                       npm run test
+        description: ""
