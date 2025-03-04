@@ -12,68 +12,73 @@ pipeline:
           infrastructure:
             type: Docker
             spec:
-              connectorRef: account.docker_connector  # Update with your actual Harness Docker connector
-              image: node:18  # Use a Node.js image to build the Next.js app
+              connectorRef: account.docker_connector
+              image: docker:20.10-dind
+              privileged: true
           execution:
             steps:
+              - step:
+                  name: Setup Environment
+                  identifier: setup_environment
+                  type: Run
+                  spec:
+                    shell: Sh
+                    command: |
+                      echo "Installing dependencies"
+                      apk add --no-cache git nodejs npm docker-compose
               - step:
                   name: Checkout Code
                   identifier: checkout_code
                   type: Run
                   spec:
-                    shell: Bash
+                    shell: Sh
                     command: |
                       echo "Checking out the repository"
                       git clone https://github.com/ayointegral/osm-nextjs.git .
                       git checkout main
-
               - step:
                   name: Install Dependencies
                   identifier: install_dependencies
                   type: Run
                   spec:
-                    shell: Bash
+                    shell: Sh
                     command: |
                       echo "Installing dependencies"
                       npm install
-
               - step:
                   name: Build Next.js App
                   identifier: build_nextjs
                   type: Run
                   spec:
-                    shell: Bash
+                    shell: Sh
                     command: |
                       echo "Building Next.js application"
                       npm run build
-
               - step:
                   name: Start Services with Docker Compose
                   identifier: start_services
                   type: Run
                   spec:
-                    shell: Bash
+                    shell: Sh
                     command: |
                       echo "Starting services with Docker Compose"
                       docker-compose up -d
-                      sleep 5  # Allow time for services to start
-
+                      sleep 10  # Allow more time for services to start
               - step:
                   name: Run Playwright Tests
                   identifier: run_playwright_tests
                   type: Run
                   spec:
-                    shell: Bash
+                    shell: Sh
                     command: |
                       echo "Running Playwright tests"
                       npm run test:e2e
-
               - step:
                   name: Clean Up Services
                   identifier: cleanup_services
                   type: Run
                   spec:
-                    shell: Bash
+                    shell: Sh
                     command: |
                       echo "Stopping Docker services"
                       docker-compose down
