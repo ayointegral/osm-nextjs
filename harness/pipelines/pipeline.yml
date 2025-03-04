@@ -48,3 +48,5 @@ pipeline:
                       echo "Running tests"
                       npm run test
         description: ""
+        delegateSelectors:
+          - helm-delegate
