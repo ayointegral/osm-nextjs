@@ -1,19 +1,79 @@
 pipeline:
-  name: Example Pipeline
-  identifier: example_pipeline
+  name: OSM Next.js CI Pipeline
+  identifier: osm_nextjs_ci_pipeline
   projectIdentifier: default_project
   orgIdentifier: default
   stages:
     - stage:
-        name: Build
-        identifier: BuildStage
+        name: Build and Deploy OSM Next.js
+        identifier: build_deploy_osm_nextjs
         type: CI
         spec:
+          infrastructure:
+            type: Docker
+            spec:
+              connectorRef: account.docker_connector  # Update with your actual Harness Docker connector
+              image: node:18  # Use a Node.js image to build the Next.js app
           execution:
             steps:
               - step:
-                  name: Build
-                  identifier: build_step
+                  name: Checkout Code
+                  identifier: checkout_code
                   type: Run
                   spec:
-                    command: echo "Building project"
+                    shell: Bash
+                    command: |
+                      echo "Checking out the repository"
+                      git clone https://github.com/ayointegral/osm-nextjs.git .
+                      git checkout main
+
+              - step:
+                  name: Install Dependencies
+                  identifier: install_dependencies
+                  type: Run
+                  spec:
+                    shell: Bash
+                    command: |
+                      echo "Installing dependencies"
+                      npm install
+
+              - step:
+                  name: Build Next.js App
+                  identifier: build_nextjs
+                  type: Run
+                  spec:
+                    shell: Bash
+                    command: |
+                      echo "Building Next.js application"
+                      npm run build
+
+              - step:
+                  name: Start Services with Docker Compose
+                  identifier: start_services
+                  type: Run
+                  spec:
+                    shell: Bash
+                    command: |
+                      echo "Starting services with Docker Compose"
+                      docker-compose up -d
+                      sleep 5  # Allow time for services to start
+
+              - step:
+                  name: Run Playwright Tests
+                  identifier: run_playwright_tests
+                  type: Run
+                  spec:
+                    shell: Bash
+                    command: |
+                      echo "Running Playwright tests"
+                      npm run test:e2e
+
+              - step:
+                  name: Clean Up Services
+                  identifier: cleanup_services
+                  type: Run
+                  spec:
+                    shell: Bash
+                    command: |
+                      echo "Stopping Docker services"
+                      docker-compose down
