@@ -3,82 +3,44 @@ pipeline:
   identifier: osm_nextjs_ci_pipeline
   projectIdentifier: default_project
   orgIdentifier: default
+  properties:
+    ci:
+      codebase:
+        connectorRef: account.github
+        repoName: ayointegral/osm-nextjs
+        build: <+input>
   stages:
     - stage:
         name: Build and Deploy OSM Next.js
         identifier: build_deploy_osm_nextjs
         type: CI
         spec:
+          cloneCodebase: true
           infrastructure:
-            type: Docker
+            type: KubernetesDirect
             spec:
-              connectorRef: account.docker_connector
-              image: docker:20.10-dind
-              privileged: true
+              connectorRef: account.kubernetesCluster
+              namespace: harness-delegate-ng
           execution:
             steps:
               - step:
-                  name: Setup Environment
-                  identifier: setup_environment
+                  name: Setup and Run
+                  identifier: setup_and_run
                   type: Run
                   spec:
-                    shell: Sh
+                    connectorRef: account.dockerhub
+                    image: node:18
+                    shell: Bash
                     command: |
                       echo "Installing dependencies"
-                      apk add --no-cache git nodejs npm docker-compose
-              - step:
-                  name: Checkout Code
-                  identifier: checkout_code
-                  type: Run
-                  spec:
-                    shell: Sh
-                    command: |
-                      echo "Checking out the repository"
-                      git clone https://github.com/ayointegral/osm-nextjs.git .
-                      git checkout main
-              - step:
-                  name: Install Dependencies
-                  identifier: install_dependencies
-                  type: Run
-                  spec:
-                    shell: Sh
-                    command: |
-                      echo "Installing dependencies"
+                      apt-get update
+                      apt-get install -y git docker.io docker-compose
+
+                      echo "Installing Node.js dependencies"
                       npm install
-              - step:
-                  name: Build Next.js App
-                  identifier: build_nextjs
-                  type: Run
-                  spec:
-                    shell: Sh
-                    command: |
+
                       echo "Building Next.js application"
                       npm run build
-              - step:
-                  name: Start Services with Docker Compose
-                  identifier: start_services
-                  type: Run
-                  spec:
-                    shell: Sh
-                    command: |
-                      echo "Starting services with Docker Compose"
-                      docker-compose up -d
-                      sleep 10  # Allow more time for services to start
-              - step:
-                  name: Run Playwright Tests
-                  identifier: run_playwright_tests
-                  type: Run
-                  spec:
-                    shell: Sh
-                    command: |
-                      echo "Running Playwright tests"
-                      npm run test:e2e
-              - step:
-                  name: Clean Up Services
-                  identifier: cleanup_services
-                  type: Run
-                  spec:
-                    shell: Sh
-                    command: |
-                      echo "Stopping Docker services"
-                      docker-compose down
+
+                      echo "Running tests"
+                      npm run test
