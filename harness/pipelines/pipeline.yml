@@ -31,10 +31,10 @@ pipeline:
                   identifier: setup_and_run
                   type: Run
                   spec:
-                    connectorRef: account.dockerhub
+                    connectorRef: account.harnessImage
                     image: node:18
                     shell: Bash
-                    command: |
+                    command: |-
                       echo "Installing dependencies"
                       apt-get update
                       apt-get install -y git docker.io docker-compose
