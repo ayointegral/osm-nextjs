@@ -53,75 +53,11 @@ interface TileProvider {
 export const tileProviders: Record<string, TileProvider> = {
   osm_local: {
     name: 'Local OpenStreetMap',
-    url: '/api/osm/{z}/{x}/{y}.png',
+    url: '/osm/{z}/{x}/{y}.png',
     attribution: ' OpenStreetMap contributors',
     maxZoom: 20,
     minZoom: 0,
     maxNativeZoom: 18,
-    highZoomConfig: {
-      quality: 'high',
-      progressiveLoading: true,
-      scaleMethod: 'auto',
-      preloadAdjacent: true,
-      fadeAnimation: true,
-      retryOnError: true
-    }
-  },
-  osm: {
-    name: 'OpenStreetMap',
-    url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-    attribution: ' OpenStreetMap contributors',
-    maxZoom: 20,
-    minZoom: 0,
-    maxNativeZoom: 18, // Ensure smooth scaling by starting one level earlier
-    highZoomConfig: {
-      quality: 'high',
-      progressiveLoading: true,
-      scaleMethod: 'auto',
-      preloadAdjacent: true,
-      fadeAnimation: true,
-      retryOnError: true
-    }
-  },
-  cyclosm: {
-    name: 'CyclOSM',
-    url: 'https://c.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png',
-    attribution: ' CyclOSM contributors',
-    maxZoom: 20,
-    minZoom: 0,
-    maxNativeZoom: 18, // Ensure smooth scaling by starting one level earlier
-    highZoomConfig: {
-      quality: 'high',
-      progressiveLoading: true,
-      scaleMethod: 'auto',
-      preloadAdjacent: true,
-      fadeAnimation: true,
-      retryOnError: true
-    }
-  },
-  humanitarian: {
-    name: 'Humanitarian',
-    url: 'https://tile-a.openstreetmap.fr/hot/{z}/{x}/{y}.png',
-    attribution: ' HOT OSM contributors',
-    maxZoom: 20,
-    minZoom: 0,
-    maxNativeZoom: 18, // Ensure smooth scaling by starting one level earlier
-    highZoomConfig: {
-      quality: 'high',
-      progressiveLoading: true,
-      scaleMethod: 'auto',
-      preloadAdjacent: true,
-      fadeAnimation: true,
-      retryOnError: true
-    }
-  },
-  terrain: {
-    name: 'Terrain',
-    url: 'https://a.tile.opentopomap.org/{z}/{x}/{y}.png',
-    attribution: ' OpenTopoMap contributors',
-    maxZoom: 20,
-    minZoom: 0,
-    maxNativeZoom: 17, // Terrain data needs lower maxNativeZoom due to detail density
     highZoomConfig: {
       quality: 'high',
       progressiveLoading: true,
@@ -220,6 +156,12 @@ const CACHE_TTL = 30 * 24 * 60 * 60 * 1000; // 30 days in milliseconds
 
 // Calculate tile size in bytes with enhanced caching
 export async function getTileSize(url: string) {
+  // Only allow internal URLs (air-gapped — no external requests)
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    console.warn('getTileSize: external URLs blocked in air-gapped mode');
+    return 0;
+  }
+
   const now = Date.now();
   const cached = tileSizeCache.get(url);
   
@@ -235,7 +177,6 @@ export async function getTileSize(url: string) {
       method: 'HEAD',
       headers: {
         'Accept': 'image/png,image/jpeg',
-        'User-Agent': 'OSM Tile Viewer (https://github.com/yourusername/osmtileviewer)',
         'Cache-Control': 'max-age=2592000', // 30 days cache
       },
       signal: controller.signal,

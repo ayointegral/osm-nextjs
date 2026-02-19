@@ -5,16 +5,6 @@ const nextConfig = {
     buildActivity: false,
     buildActivityPosition: 'bottom-right',
   },
-  images: {
-    remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: 'tile.openstreetmap.org',
-        port: '',
-        pathname: '/**',
-      },
-    ],
-  },
 }
 
 module.exports = nextConfig

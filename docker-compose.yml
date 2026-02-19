@@ -25,7 +25,7 @@ services:
       - ./prisma:/app/prisma
       - ./tiles:/app/tiles:rw
     networks:
-      - osm_network
+      - internal_net
 
   db:
     image: postgres:17-alpine
@@ -45,7 +45,7 @@ services:
       start_period: 30s
     restart: unless-stopped
     networks:
-      - osm_network
+      - internal_net
 
   nginx:
     image: nginx:alpine
@@ -67,11 +67,15 @@ services:
         condition: service_healthy
     restart: unless-stopped
     networks:
-      - osm_network
+      - internal_net
+      - ingress_net
 
 networks:
-  osm_network:
+  internal_net:
     driver: bridge
+    internal: true    # No internet access — air-gapped
+  ingress_net:
+    driver: bridge    # Host can reach nginx on port 80
 
 volumes:
   postgres_data:
