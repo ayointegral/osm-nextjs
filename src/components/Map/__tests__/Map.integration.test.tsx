@@ -1,17 +1,29 @@
+import React from 'react';
 import { render, act, waitFor } from '@testing-library/react';
 import { Map } from '../Map';
 import { useMap } from 'react-leaflet';
 
+// Mock react-leaflet with full component mocks (no requireActual)
 jest.mock('react-leaflet', () => ({
-  ...jest.requireActual('react-leaflet'),
   useMap: jest.fn(),
-  MapContainer: ({ children }: { children: React.ReactNode }) => <div data-testid="map-container">{children}</div>,
-  TileLayer: () => null,
-  ZoomControl: () => null,
-  LayersControl: {
-    BaseLayer: () => null,
-  },
-  ScaleControl: () => null,
+  MapContainer: Object.assign(
+    function({ children }: { children: React.ReactNode }): React.ReactElement {
+      return <div data-testid="map-container">{children}</div>;
+    },
+    { displayName: 'MapContainer' }
+  ),
+  TileLayer: Object.assign(
+    function() { return null; },
+    { displayName: 'TileLayer' }
+  ),
+  ZoomControl: Object.assign(
+    function() { return null; },
+    { displayName: 'ZoomControl' }
+  ),
+  ScaleControl: Object.assign(
+    function() { return null; },
+    { displayName: 'ScaleControl' }
+  ),
 }));
 
 describe('Map Integration Tests', () => {
@@ -21,12 +33,34 @@ describe('Map Integration Tests', () => {
     getZoom: jest.fn(() => 13),
     getCenter: jest.fn(() => ({ lat: 51.505, lng: -0.09 })),
     setView: jest.fn(),
+    getBounds: jest.fn().mockReturnValue({
+      getNorthWest: () => ({ lat: 51.6, lng: -0.2 }),
+      getSouthEast: () => ({ lat: 51.4, lng: 0.0 }),
+    }),
+    project: jest.fn().mockReturnValue({ x: 100, y: 100 }),
+    getContainer: jest.fn().mockReturnValue({ style: {} }),
+    getPanes: jest.fn().mockReturnValue({
+      tilePane: { style: {} },
+    }),
   };
 
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.useFakeTimers();
     (useMap as jest.Mock).mockReturnValue(mockMap);
-    global.fetch = jest.fn();
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      headers: { get: () => 'application/json' },
+      json: () => Promise.resolve({
+        defaultProvider: 'osm_local',
+        defaultZoom: 13,
+        defaultCenter: { lat: 51.505, lng: -0.09 },
+      }),
+    });
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
   });
 
   describe('API Integration', () => {
@@ -39,10 +73,13 @@ describe('Map Integration Tests', () => {
 
       (global.fetch as jest.Mock).mockResolvedValueOnce({
         ok: true,
+        headers: { get: () => 'application/json' },
         json: () => Promise.resolve(mockSettings),
       });
 
-      render(<Map />);
+      await act(async () => {
+        render(<Map />);
+      });
 
       await waitFor(() => {
         expect(global.fetch).toHaveBeenCalledWith('/api/settings');
@@ -50,29 +87,39 @@ describe('Map Integration Tests', () => {
     });
 
     it('should handle failed settings load', async () => {
-      const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+      const consoleSpy = jest.spyOn(console, 'warn').mockImplementation();
       (global.fetch as jest.Mock).mockResolvedValueOnce({
         ok: false,
+        headers: { get: () => 'application/json' },
         json: () => Promise.resolve({ error: 'Failed to load settings' }),
       });
 
-      render(<Map />);
+      await act(async () => {
+        render(<Map />);
+      });
 
       await waitFor(() => {
-        expect(consoleSpy).toHaveBeenCalled();
+        expect(consoleSpy).toHaveBeenCalledWith(
+          'Failed to load settings, using defaults'
+        );
       });
 
       consoleSpy.mockRestore();
     });
 
     it('should handle network errors', async () => {
-      const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+      const consoleSpy = jest.spyOn(console, 'warn').mockImplementation();
       (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('Network error'));
 
-      render(<Map />);
+      await act(async () => {
+        render(<Map />);
+      });
 
       await waitFor(() => {
-        expect(consoleSpy).toHaveBeenCalled();
+        expect(consoleSpy).toHaveBeenCalledWith(
+          'Error loading settings, using defaults:',
+          expect.any(Error)
+        );
       });
 
       consoleSpy.mockRestore();
@@ -81,78 +128,137 @@ describe('Map Integration Tests', () => {
 
   describe('Map Events', () => {
     it('should handle zoom events', async () => {
+      await act(async () => {
+        render(<Map />);
+      });
+
+      // Wait for initial settings load
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalledWith('/api/settings');
+      });
+
+      // Clear fetch mock to isolate the POST call
+      (global.fetch as jest.Mock).mockClear();
       (global.fetch as jest.Mock).mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve({}),
+        headers: { get: () => 'application/json' },
+        json: () => Promise.resolve({
+          defaultProvider: 'osm_local',
+          defaultZoom: 13,
+          defaultCenter: { lat: 51.505, lng: -0.09 },
+        }),
       });
 
-      render(<Map />);
-
-      await act(async () => {
-        const zoomHandler = mockMap.on.mock.calls.find(call => call[0] === 'zoomend')[1];
-        zoomHandler();
-      });
-
-      expect(global.fetch).toHaveBeenCalledWith(
-        '/api/settings',
-        expect.objectContaining({
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-        })
+      // Invoke all zoomend handlers (MapEventHandler + HighZoomTileLayer both register)
+      const zoomendCalls = mockMap.on.mock.calls.filter(
+        (call: [string, () => void]) => call[0] === 'zoomend'
       );
+      await act(async () => {
+        zoomendCalls.forEach((call: [string, () => void]) => call[1]());
+      });
+
+      // Advance timers past the 1000ms debounce
+      await act(async () => {
+        jest.advanceTimersByTime(1000);
+      });
+
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalledWith(
+          '/api/settings',
+          expect.objectContaining({
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+          })
+        );
+      });
     });
 
     it('should handle move events', async () => {
+      await act(async () => {
+        render(<Map />);
+      });
+
+      // Wait for initial settings load
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalledWith('/api/settings');
+      });
+
+      // Clear fetch mock to isolate the POST call
+      (global.fetch as jest.Mock).mockClear();
       (global.fetch as jest.Mock).mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve({}),
+        headers: { get: () => 'application/json' },
+        json: () => Promise.resolve({
+          defaultProvider: 'osm_local',
+          defaultZoom: 13,
+          defaultCenter: { lat: 51.505, lng: -0.09 },
+        }),
       });
 
-      render(<Map />);
-
-      await act(async () => {
-        const moveHandler = mockMap.on.mock.calls.find(call => call[0] === 'moveend')[1];
-        moveHandler();
-      });
-
-      expect(global.fetch).toHaveBeenCalledWith(
-        '/api/settings',
-        expect.objectContaining({
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-        })
+      // Invoke all moveend handlers (MapEventHandler + HighZoomTileLayer both register)
+      const moveendCalls = mockMap.on.mock.calls.filter(
+        (call: [string, () => void]) => call[0] === 'moveend'
       );
+      await act(async () => {
+        moveendCalls.forEach((call: [string, () => void]) => call[1]());
+      });
+
+      // Advance timers past the 1000ms debounce
+      await act(async () => {
+        jest.advanceTimersByTime(1000);
+      });
+
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalledWith(
+          '/api/settings',
+          expect.objectContaining({
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+          })
+        );
+      });
     });
   });
 
   describe('Error Handling', () => {
     it('should handle malformed JSON responses', async () => {
-      const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+      const consoleSpy = jest.spyOn(console, 'warn').mockImplementation();
       (global.fetch as jest.Mock).mockResolvedValueOnce({
         ok: true,
+        headers: { get: () => 'application/json' },
         json: () => Promise.reject(new Error('Invalid JSON')),
       });
 
-      render(<Map />);
+      await act(async () => {
+        render(<Map />);
+      });
 
       await waitFor(() => {
-        expect(consoleSpy).toHaveBeenCalled();
+        expect(consoleSpy).toHaveBeenCalledWith(
+          'Error loading settings, using defaults:',
+          expect.any(Error)
+        );
       });
 
       consoleSpy.mockRestore();
     });
 
     it('should handle API errors with error messages', async () => {
-      const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+      const consoleSpy = jest.spyOn(console, 'warn').mockImplementation();
       (global.fetch as jest.Mock).mockResolvedValueOnce({
         ok: false,
+        headers: { get: () => 'application/json' },
         json: () => Promise.resolve({ error: 'Custom error message' }),
       });
 
-      render(<Map />);
+      await act(async () => {
+        render(<Map />);
+      });
 
       await waitFor(() => {
-        expect(consoleSpy).toHaveBeenCalled();
+        expect(consoleSpy).toHaveBeenCalledWith(
+          'Failed to load settings, using defaults'
+        );
       });
 
       consoleSpy.mockRestore();

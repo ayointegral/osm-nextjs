@@ -1,3 +1,4 @@
+/** @jest-environment node */
 import { GET, POST } from '../route';
 import { prisma } from '@/lib/prisma';
 
@@ -10,6 +11,7 @@ jest.mock('@/lib/prisma', () => ({
     },
     user: {
       create: jest.fn(),
+      upsert: jest.fn(),
     },
   },
 }));
@@ -74,6 +76,7 @@ describe('Settings API', () => {
         ...mockSettings,
       };
 
+      (prisma.user.upsert as jest.Mock).mockResolvedValueOnce({ id: 'default-user', email: 'default@example.com' });
       (prisma.settings.upsert as jest.Mock).mockResolvedValueOnce(mockResponse);
 
       const request = new Request('http://localhost:3000/api/settings', {
@@ -87,13 +90,27 @@ describe('Settings API', () => {
 
       expect(response.status).toBe(200);
       expect(data).toEqual(mockResponse);
+      expect(prisma.user.upsert).toHaveBeenCalledWith({
+        where: { id: 'default-user' },
+        update: {},
+        create: {
+          id: 'default-user',
+          email: 'default@example.com',
+        },
+      });
       expect(prisma.settings.upsert).toHaveBeenCalledWith({
         where: { userId: 'default-user' },
-        update: mockSettings,
-        create: expect.objectContaining({
+        update: {
+          defaultProvider: mockSettings.defaultProvider,
+          defaultZoom: mockSettings.defaultZoom,
+          defaultCenter: mockSettings.defaultCenter,
+        },
+        create: {
           userId: 'default-user',
-          ...mockSettings,
-        }),
+          defaultProvider: mockSettings.defaultProvider,
+          defaultZoom: mockSettings.defaultZoom,
+          defaultCenter: mockSettings.defaultCenter,
+        },
       });
     });
 
@@ -104,6 +121,7 @@ describe('Settings API', () => {
         defaultCenter: { lat: 51.505, lng: -0.09 },
       };
 
+      (prisma.user.upsert as jest.Mock).mockResolvedValueOnce({ id: 'default-user', email: 'default@example.com' });
       (prisma.settings.upsert as jest.Mock).mockRejectedValueOnce(new Error('Database error'));
 
       const request = new Request('http://localhost:3000/api/settings', {

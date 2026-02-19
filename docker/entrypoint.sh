@@ -16,7 +16,7 @@ if ! /app/scripts/wait-for-db.sh "$DB_HOST"; then
 fi
 
 echo "Running database migrations..."
-if ! npx prisma migrate deploy; then
+if ! node ./node_modules/prisma/build/index.js migrate deploy; then
     echo "ERROR: Failed to run database migrations"
     exit 1
 fi

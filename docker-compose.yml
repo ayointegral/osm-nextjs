@@ -23,11 +23,12 @@ services:
         condition: service_healthy
     volumes:
       - ./prisma:/app/prisma
+      - ./tiles:/app/tiles:rw
     networks:
       - osm_network
 
   db:
-    image: postgis/postgis:15-3.3
+    image: postgres:17-alpine
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
@@ -52,6 +53,7 @@ services:
       - "80:80"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./tiles:/data/tiles:ro
       - nginx_cache:/var/cache/nginx:rw
       - nginx_run:/var/run:rw
       - nginx_logs:/var/log/nginx:rw

@@ -1,5 +1,5 @@
-# Use Node 18.19-alpine as it's the latest LTS version of Node 18
-FROM node:18.19-alpine AS base
+# Use Node 22 Alpine (matches package.json engines requirement)
+FROM node:22-alpine AS base
 
 # Install dependencies only when needed
 FROM base AS deps
@@ -8,6 +8,7 @@ WORKDIR /app
 
 # Copy package files for better layer caching
 COPY package.json package-lock.json ./
+ENV CYPRESS_INSTALL_BINARY=0
 RUN npm ci
 
 # Builder stage
@@ -51,10 +52,10 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder /app/prisma ./prisma
 
-# Install and generate Prisma client before switching user
+# Copy Prisma client and CLI (already generated in builder stage)
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
-RUN npm install @prisma/client && \
-    npx prisma generate
+COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 
 # Set proper permissions
 RUN chown -R nextjs:nodejs /app && \

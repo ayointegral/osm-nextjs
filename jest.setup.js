@@ -12,7 +12,9 @@ class MockIntersectionObserver {
   disconnect = jest.fn();
 }
 
-window.IntersectionObserver = MockIntersectionObserver;
+if (typeof window !== 'undefined') {
+  window.IntersectionObserver = MockIntersectionObserver;
+}
 
 // Mock ResizeObserver
 class MockResizeObserver {
@@ -21,19 +23,25 @@ class MockResizeObserver {
   disconnect = jest.fn();
 }
 
-window.ResizeObserver = MockResizeObserver;
+if (typeof window !== 'undefined') {
+  window.ResizeObserver = MockResizeObserver;
 
-// Mock matchMedia
-Object.defineProperty(window, 'matchMedia', {
-  writable: true,
-  value: jest.fn().mockImplementation(query => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addListener: jest.fn(),
-    removeListener: jest.fn(),
-    addEventListener: jest.fn(),
-    removeEventListener: jest.fn(),
-    dispatchEvent: jest.fn(),
-  })),
-});
+  // Mock matchMedia
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: jest.fn().mockImplementation(query => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: jest.fn(),
+      removeListener: jest.fn(),
+      addEventListener: jest.fn(),
+      removeEventListener: jest.fn(),
+      dispatchEvent: jest.fn(),
+    })),
+  });
+}
+
+// Mock requestIdleCallback / cancelIdleCallback (not available in jsdom)
+global.requestIdleCallback = global.requestIdleCallback || ((cb) => setTimeout(cb, 1));
+global.cancelIdleCallback = global.cancelIdleCallback || ((id) => clearTimeout(id));

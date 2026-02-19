@@ -1,57 +1,88 @@
 import { NextResponse } from 'next/server';
-import { isValidTile } from '@/utils/tile-utils';
+import { promises as fs } from 'fs';
+import path from 'path';
 
-export const dynamic = 'force-dynamic'; // Ensure dynamic route handling
-export const revalidate = 86400; // Cache tiles for 24 hours
+// Dynamic route — must check filesystem on each request
+export const dynamic = 'force-dynamic';
+
+const TILES_DIR = path.join(process.cwd(), 'tiles');
 
 export async function GET(
   request: Request,
   context: { params: Promise<{ z: string; x: string; y: string }> }
 ) {
   const params = await context.params;
-  const { z, x, y } = params;
-  
-  // Validate tile coordinates
-  if (!isValidTile(Number(x), Number(y), Number(z))) {
-    return NextResponse.json(
-      { error: 'Invalid tile coordinates' },
-      { status: 400 }
-    );
+  const z = parseInt(params.z);
+  const x = parseInt(params.x);
+  const y = parseInt(params.y);
+
+  // Basic validation
+  if (isNaN(z) || isNaN(x) || isNaN(y) || z < 0 || z > 19) {
+    return new NextResponse(null, { status: 400 });
   }
 
+  const tilePath = path.join(TILES_DIR, `${z}`, `${x}`, `${y}.png`);
+
+  // Tier 1: Try local filesystem
   try {
-    // Fetch tile from OSM with timeout
+    const tileData = await fs.readFile(tilePath);
+    return new NextResponse(tileData, {
+      headers: {
+        'Content-Type': 'image/png',
+        'Cache-Control': 'public, max-age=31536000, immutable',
+        'X-Tile-Source': 'local-disk',
+      },
+    });
+  } catch {
+    // File not found, fall through to CDN
+  }
+
+  // Tier 2: Fetch from OSM CDN
+  try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000); // 5 second timeout
-    
+    const timeout = setTimeout(() => controller.abort(), 8000);
+
     const response = await fetch(
       `https://tile.openstreetmap.org/${z}/${x}/${y}.png`,
       {
         signal: controller.signal,
-        headers: {
-          'User-Agent': 'OSM Tile Viewer/1.0'
-        }
+        headers: { 'User-Agent': 'OSM-NextJS-Viewer/1.0' },
       }
     );
-    
     clearTimeout(timeout);
 
     if (!response.ok) {
-      throw new Error(`Tile fetch failed: ${response.statusText}`);
+      return new NextResponse(null, { status: response.status });
     }
 
-    // Return the tile image
-    return new NextResponse(response.body, {
+    const tileBuffer = Buffer.from(await response.arrayBuffer());
+
+    // Cache to disk (fire and forget, don't block response)
+    const dir = path.dirname(tilePath);
+    fs.mkdir(dir, { recursive: true })
+      .then(() => fs.writeFile(tilePath, tileBuffer))
+      .catch(() => {}); // Silently fail if read-only mount
+
+    return new NextResponse(tileBuffer, {
       headers: {
         'Content-Type': 'image/png',
-        'Cache-Control': 'public, max-age=86400, stale-while-revalidate=3600'
-      }
+        'Cache-Control': 'public, max-age=86400, s-maxage=7776000',
+        'X-Tile-Source': 'osm-cdn',
+      },
     });
-  } catch (error) {
-    console.error('Tile fetch error:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch tile' },
-      { status: 500 }
+  } catch {
+    // CDN failed — return transparent 1x1 PNG
+    const EMPTY_PNG = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
+      'base64'
     );
+    return new NextResponse(EMPTY_PNG, {
+      status: 200,
+      headers: {
+        'Content-Type': 'image/png',
+        'Cache-Control': 'public, max-age=60',
+        'X-Tile-Source': 'fallback-empty',
+      },
+    });
   }
 }

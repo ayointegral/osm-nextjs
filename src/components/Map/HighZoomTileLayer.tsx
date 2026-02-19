@@ -5,7 +5,8 @@
  * 1. Progressive tile loading with quality controls
  * 2. Smart caching for parent tiles during zoom transitions
  * 3. Efficient tile preloading for adjacent areas
- * 4. Hardware-accelerated transforms for smooth scaling
+ * 4. Zoom-level tile preloading (Z+1 and Z-1) for instant zoom transitions
+ * 5. Hardware-accelerated transforms for smooth scaling
  * 
  * @see /docs/CACHING.md for detailed documentation of caching mechanisms
  */
@@ -18,22 +19,11 @@ import { TileLayer, useMap } from 'react-leaflet';
  */
 interface HighZoomTileLayerProps {
   /** URL template for tile source */
-  /** Attribution text for the tile layer */
-  /** Maximum zoom level supported */
-  /** Minimum zoom level supported */
-  /** Maximum zoom level with native tile support */
-  /** Callback when a tile finishes loading */
-  /** Callback when a tile fails to load */
-  /** Callback when a tile starts loading */
-  /** Configuration for high zoom behavior */
   url: string;
   attribution: string;
   maxZoom: number;
   minZoom: number;
   maxNativeZoom: number;
-  onTileLoad?: () => void;
-  onTileError?: () => void;
-  onTileLoading?: () => void;
   highZoomConfig?: {
     quality: 'low' | 'medium' | 'high';
     progressiveLoading: boolean;
@@ -47,13 +37,9 @@ export function HighZoomTileLayer({
   maxZoom,
   minZoom,
   maxNativeZoom,
-  onTileLoad,
-  onTileError,
-  onTileLoading,
   highZoomConfig
 }: HighZoomTileLayerProps) {
   const map = useMap();
-  const currentZoom = map.getZoom();
 
   // Create a loading queue for progressive loading
   // Tile state tracking
@@ -66,6 +52,12 @@ export function HighZoomTileLayer({
     loaded: new Set(),
     parents: new Set()
   });
+
+  // Generation counter to cancel stale preloads
+  const preloadGeneration = useRef(0);
+
+  // Preload images storage for GC prevention and cancellation
+  const preloadImages = useRef<HTMLImageElement[]>([]);
 
   /**
    * Returns a transparent PNG as fallback for failed tile loads
@@ -130,6 +122,112 @@ export function HighZoomTileLayer({
       }
     });
   }, [url, maxNativeZoom, getParentTile]);
+
+  /**
+   * Calculates the tile coordinate range for a given zoom level
+   * based on the current map viewport bounds.
+   */
+  const getTileRange = useCallback((targetZoom: number) => {
+    const bounds = map.getBounds();
+    const nw = map.project(bounds.getNorthWest(), targetZoom);
+    const se = map.project(bounds.getSouthEast(), targetZoom);
+    const tileSize = 256;
+    return {
+      minX: Math.floor(nw.x / tileSize),
+      maxX: Math.floor(se.x / tileSize),
+      minY: Math.floor(nw.y / tileSize),
+      maxY: Math.floor(se.y / tileSize),
+    };
+  }, [map]);
+
+  /**
+   * Preloads tiles at Z+1 and Z-1 for the current viewport so that
+   * zooming in/out feels instant. Tiles are loaded center-out in
+   * staggered batches of 4, scheduled via requestIdleCallback.
+   */
+  const preloadZoomLevels = useCallback(() => {
+    const generation = ++preloadGeneration.current;
+
+    // Clear previous preload images
+    preloadImages.current.forEach(img => { img.src = ''; });
+    preloadImages.current = [];
+
+    const currentZoom = map.getZoom();
+    const center = map.getCenter();
+    const centerPoint = map.project(center, currentZoom);
+    const centerTileX = Math.floor(centerPoint.x / 256);
+    const centerTileY = Math.floor(centerPoint.y / 256);
+
+    const zoomLevels: number[] = [];
+    // Preload Z+1 (zoom in) — 4x tiles, cap at 24
+    if (currentZoom + 1 <= maxNativeZoom) zoomLevels.push(currentZoom + 1);
+    // Preload Z-1 (zoom out) — fewer tiles needed
+    if (currentZoom - 1 >= minZoom) zoomLevels.push(currentZoom - 1);
+
+    const loadTile = (z: number, x: number, y: number) => {
+      const key = `${z}/${x}/${y}`;
+      const cache = tileCache.current;
+      if (cache.loaded.has(key) || cache.loading.has(key)) return;
+      cache.loading.add(key);
+
+      const img = new Image();
+      img.onload = () => { cache.loaded.add(key); cache.loading.delete(key); };
+      img.onerror = () => { cache.loading.delete(key); };
+
+      let tileZ = z, tileX = x, tileY = y;
+      if (z > maxNativeZoom) {
+        const parent = getParentTile(x, y, z);
+        tileZ = parent.z; tileX = parent.x; tileY = parent.y;
+      }
+      img.src = url
+        .replace('{z}', String(tileZ))
+        .replace('{x}', String(tileX))
+        .replace('{y}', String(tileY));
+      preloadImages.current.push(img);
+    };
+
+    // Use requestIdleCallback (with setTimeout fallback for Safari)
+    const scheduleIdle = typeof requestIdleCallback !== 'undefined'
+      ? requestIdleCallback
+      : (cb: () => void) => setTimeout(cb, 1);
+
+    zoomLevels.forEach(targetZoom => {
+      scheduleIdle(() => {
+        if (preloadGeneration.current !== generation) return; // Stale
+
+        const range = getTileRange(targetZoom);
+        const tiles: Array<{ x: number; y: number; dist: number }> = [];
+
+        // Scale center tile coords to target zoom
+        const scale = Math.pow(2, targetZoom - currentZoom);
+        const targetCenterX = Math.floor(centerTileX * scale);
+        const targetCenterY = Math.floor(centerTileY * scale);
+
+        for (let x = range.minX; x <= range.maxX; x++) {
+          for (let y = range.minY; y <= range.maxY; y++) {
+            const dist = Math.abs(x - targetCenterX) + Math.abs(y - targetCenterY);
+            tiles.push({ x, y, dist });
+          }
+        }
+
+        // Sort center-out, cap at 24 for Z+1, 8 for Z-1
+        tiles.sort((a, b) => a.dist - b.dist);
+        const cap = targetZoom > currentZoom ? 24 : 8;
+        const toLoad = tiles.slice(0, cap);
+
+        // Stagger in batches of 4
+        let i = 0;
+        const loadBatch = () => {
+          if (preloadGeneration.current !== generation) return;
+          const batch = toLoad.slice(i, i + 4);
+          batch.forEach(t => loadTile(targetZoom, t.x, t.y));
+          i += 4;
+          if (i < toLoad.length) setTimeout(loadBatch, 50);
+        };
+        loadBatch();
+      });
+    });
+  }, [map, url, minZoom, maxNativeZoom, getParentTile, getTileRange]);
 
   // Keep track of the last successful parent tiles
   const lastParentTiles = useRef<Set<string>>(new Set());
@@ -255,21 +353,39 @@ export function HighZoomTileLayer({
         maxY: Math.floor(se.y / tileSize)
       };
       
-      // Preload tiles for visible area
+      // Preload tiles for visible area (same-zoom adjacent tiles)
       for (let x = tileBounds.minX; x <= tileBounds.maxX; x++) {
         for (let y = tileBounds.minY; y <= tileBounds.maxY; y++) {
           preloadAdjacentTiles(x, y, zoom);
         }
       }
+
+      // Then preload Z+1 and Z-1 for instant zoom transitions
+      preloadZoomLevels();
+    };
+
+    /**
+     * Cancels any in-flight zoom-level preloads when the user starts
+     * a new interaction (pan or zoom). This prevents wasted bandwidth
+     * on tiles that are no longer relevant.
+     */
+    const handleInteractionStart = () => {
+      preloadGeneration.current++;
+      preloadImages.current.forEach(img => { img.src = ''; });
+      preloadImages.current = [];
     };
 
     map.on('zoomend', handleZoomEnd);
     map.on('moveend', handleMoveEnd);
+    map.on('movestart', handleInteractionStart);
+    map.on('zoomstart', handleInteractionStart);
     
     return () => {
       map.off('zoomstart', handleZoomStart);
       map.off('zoomend', handleZoomEnd);
       map.off('moveend', handleMoveEnd);
+      map.off('movestart', handleInteractionStart);
+      map.off('zoomstart', handleInteractionStart);
       map.getContainer().style.filter = '';
       const panes = map.getPanes();
       if (panes.tilePane) {
@@ -277,12 +393,16 @@ export function HighZoomTileLayer({
         panes.tilePane.style.transform = '';
         panes.tilePane.style.filter = '';
       }
+      // Cancel any pending preloads on unmount
+      preloadGeneration.current++;
+      preloadImages.current.forEach(img => { img.src = ''; });
+      preloadImages.current = [];
       // Use captured cache value in cleanup
       cache.loading.clear();
       cache.loaded.clear();
       cache.parents.clear();
     };
-  }, [map, maxNativeZoom, highZoomConfig, preloadAdjacentTiles]);
+  }, [map, maxNativeZoom, highZoomConfig, preloadAdjacentTiles, preloadZoomLevels]);
 
   return (
     <TileLayer
@@ -293,22 +413,12 @@ export function HighZoomTileLayer({
       maxNativeZoom={maxNativeZoom}
       errorTileUrl={getErrorTile()}
       className="transition-opacity duration-300 ease-in-out"
-      keepBuffer={32}
+      keepBuffer={3}
       updateWhenZooming={false}
       updateWhenIdle={true}
-      zIndex={currentZoom > maxNativeZoom ? 300 : undefined}
       tileSize={256}
-      detectRetina={true}
+      detectRetina={false}
       updateInterval={150}
-      crossOrigin="anonymous"
-      eventHandlers={{
-        loading: onTileLoading,
-        load: onTileLoad,
-        error: onTileError,
-        tileloadstart: onTileLoading,
-        tileload: onTileLoad,
-        tileerror: onTileError
-      }}
     />
   );
 }

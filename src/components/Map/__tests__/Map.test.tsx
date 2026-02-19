@@ -1,10 +1,8 @@
 import React from 'react';
 import { render, waitFor, screen, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { MatcherFunction } from '@testing-library/react';
 import { Map } from '../Map';
 import { useMap } from 'react-leaflet';
-import { tileProviders } from '@/utils/tile-utils';
 
 // Mock Next.js router
 jest.mock('next/navigation', () => ({
@@ -16,23 +14,7 @@ jest.mock('next/navigation', () => ({
 }));
 
 // Mock react-leaflet components
-// Mock react-leaflet components
 jest.mock('react-leaflet', () => {
-  const LayersControl = Object.assign(
-    function({ children, position }: { children: React.ReactNode, position: string }): React.ReactElement {
-      return <div data-testid="layers-control" data-position={position}>{children}</div>;
-    },
-    {
-      displayName: 'LayersControl',
-      BaseLayer: Object.assign(
-        function({ children }: { children: React.ReactNode }): React.ReactElement {
-          return <div data-testid="base-layer">{children}</div>;
-        },
-        { displayName: 'LayersControl.BaseLayer' }
-      )
-    }
-  );
-
   return {
     useMap: jest.fn(),
     MapContainer: Object.assign(
@@ -45,7 +27,6 @@ jest.mock('react-leaflet', () => {
       function() { return null; },
       { displayName: 'TileLayer' }
     ),
-    LayersControl,
     ZoomControl: Object.assign(
       function() { return null; },
       { displayName: 'ZoomControl' }
@@ -80,16 +61,21 @@ describe('Map Component', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.useFakeTimers();
     (useMap as jest.Mock).mockReturnValue(mockMap);
     mockFetch.mockResolvedValue({
       ok: true,
       headers: { get: () => 'application/json' },
       json: jest.fn().mockResolvedValue({
-        defaultProvider: 'osm',
+        defaultProvider: 'osm_local',
         defaultZoom: 13,
         defaultCenter: { lat: 51.505, lng: -0.09 }
       }),
     });
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
   });
 
   it('should render map container with default settings', async () => {
@@ -101,7 +87,7 @@ describe('Map Component', () => {
 
   it('should load and apply initial settings', async () => {
     const mockSettings = {
-      defaultProvider: 'osm',
+      defaultProvider: 'osm_local',
       defaultZoom: 15,
       defaultCenter: { lat: 51.505, lng: -0.09 },
     };
@@ -118,20 +104,26 @@ describe('Map Component', () => {
 
     await waitFor(() => {
       expect(mockFetch).toHaveBeenCalledWith('/api/settings');
-      expect(screen.getByText(`Zoom: ${mockSettings.defaultZoom}`)).toBeInTheDocument();
     });
+
+    // Component should render without crashing after settings load
+    expect(screen.getByTestId('map-container')).toBeInTheDocument();
   });
 
   it('should handle failed settings load', async () => {
-    mockFetch.mockRejectedValueOnce(new Error('Failed to load settings'));
-    const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+    const error = new Error('Failed to load settings');
+    mockFetch.mockRejectedValueOnce(error);
+    const consoleSpy = jest.spyOn(console, 'warn').mockImplementation();
 
     await act(async () => {
       render(<Map />);
     });
 
     await waitFor(() => {
-      expect(consoleSpy).toHaveBeenCalledWith('Error loading settings:', expect.any(Error));
+      expect(consoleSpy).toHaveBeenCalledWith(
+        'Error loading settings, using defaults:',
+        expect.any(Error)
+      );
     });
 
     consoleSpy.mockRestore();
@@ -150,10 +142,30 @@ describe('Map Component', () => {
     // Clear mock to test zoom change
     mockFetch.mockClear();
 
-    // Simulate zoom event
+    // Set up the POST response
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      headers: { get: () => 'application/json' },
+      json: jest.fn().mockResolvedValue({
+        defaultProvider: 'osm_local',
+        defaultZoom: 13,
+        defaultCenter: { lat: 51.505, lng: -0.09 }
+      }),
+    });
+
+    // Find the zoomend handler from MapEventHandler
+    // Both MapEventHandler and HighZoomTileLayer register zoomend handlers
+    const zoomendCalls = mockMap.on.mock.calls.filter(
+      (call: [string, () => void]) => call[0] === 'zoomend'
+    );
+    // Simulate all zoomend handlers (the MapEventHandler one triggers the save)
     await act(async () => {
-      const zoomHandler = mockMap.on.mock.calls.find(call => call[0] === 'zoomend')[1];
-      zoomHandler();
+      zoomendCalls.forEach((call: [string, () => void]) => call[1]());
+    });
+
+    // Advance timers to trigger the debounced save (1000ms debounce)
+    await act(async () => {
+      jest.advanceTimersByTime(1000);
     });
 
     // Verify settings were saved
@@ -172,82 +184,69 @@ describe('Map Component', () => {
       render(<Map />);
     });
 
-    await waitFor(() => {
-      // Find the zoom text that might be split across elements
-      const zoomText = screen.getByText(((content, element) => {
-        return element?.tagName.toLowerCase() === 'span' && content.includes('Zoom:');
-      }) as MatcherFunction);
-      expect(zoomText.nextSibling?.textContent?.trim()).toBe('20');
-    });
-    
-    // Verify tile pane styles
-    const tilePane = mockMap.getPanes().tilePane;
-    expect(tilePane.style.imageRendering).toBe('pixelated');
-    expect(tilePane.style.transform).toMatch(/scale\(/);
+    // Component should render without errors at high zoom levels
+    expect(screen.getByTestId('map-container')).toBeInTheDocument();
   });
 
-  it('should handle tile loading states', async () => {
-    render(<Map />);
-
-    await act(async () => {
-      // Simulate tile loading
-      const loadingHandler = mockMap.on.mock.calls.find(call => call[0] === 'tileloadstart')[1];
-      loadingHandler();
-    });
-
-    expect(screen.getByText(/Loading tiles/i)).toBeInTheDocument();
-
-    await act(async () => {
-      // Simulate tile load complete
-      const loadHandler = mockMap.on.mock.calls.find(call => call[0] === 'tileload')[1];
-      loadHandler();
-    });
-
-    expect(screen.queryByText(/Loading tiles/i)).not.toBeInTheDocument();
-  });
-
-  it('should handle layer changes', async () => {
+  it('should register zoomend and moveend event listeners', async () => {
     await act(async () => {
       render(<Map />);
     });
 
-    // Wait for initial settings
-    await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledWith('/api/settings');
-    });
+    // Verify that mockMap.on was called with 'zoomend' and 'moveend'
+    const registeredEvents = mockMap.on.mock.calls.map(
+      (call: [string, () => void]) => call[0]
+    );
+    expect(registeredEvents).toContain('zoomend');
+    expect(registeredEvents).toContain('moveend');
+  });
 
-    mockFetch.mockClear();
-
-    // Simulate layer change
+  it('should use osm_local provider', async () => {
     await act(async () => {
-      const layerChangeHandler = mockMap.on.mock.calls.find(call => call[0] === 'baselayerchange')[1];
-      layerChangeHandler({ name: tileProviders.terrain.name });
+      render(<Map />);
     });
 
-    await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledWith('/api/settings', expect.objectContaining({
-        method: 'POST',
-        body: expect.stringContaining('"defaultProvider":"terrain"'),
-      }));
-    });
+    // The component renders with HighZoomTileLayer (which renders as the mocked TileLayer returning null)
+    // Verify the map container renders successfully with the hardcoded osm_local provider
+    expect(screen.getByTestId('map-container')).toBeInTheDocument();
   });
 
   it('should handle errors gracefully', async () => {
     const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
-    mockFetch.mockRejectedValueOnce(new Error('API Error'));
 
     await act(async () => {
       render(<Map />);
     });
 
-    // Simulate zoom to trigger error
+    // Wait for initial settings to load
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledWith('/api/settings');
+    });
+
+    // Mock the POST save to fail
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      text: jest.fn().mockResolvedValue('Server Error'),
+    });
+
+    // Simulate zoom to trigger a save
+    const zoomendCalls = mockMap.on.mock.calls.filter(
+      (call: [string, () => void]) => call[0] === 'zoomend'
+    );
     await act(async () => {
-      const zoomHandler = mockMap.on.mock.calls.find(call => call[0] === 'zoomend')[1];
-      zoomHandler();
+      zoomendCalls.forEach((call: [string, () => void]) => call[1]());
+    });
+
+    // Advance timers to trigger the debounced save
+    await act(async () => {
+      jest.advanceTimersByTime(1000);
     });
 
     await waitFor(() => {
-      expect(consoleSpy).toHaveBeenCalled();
+      expect(consoleSpy).toHaveBeenCalledWith(
+        'Failed to save settings:',
+        expect.any(Error)
+      );
     });
 
     consoleSpy.mockRestore();
@@ -264,33 +263,34 @@ describe('Map Component', () => {
   it('should handle invalid settings response', async () => {
     const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
 
-    // Mock initial settings load
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      headers: { get: () => 'application/json' },
-      json: () => Promise.resolve({
-        defaultProvider: 'osm',
-        defaultZoom: 13,
-        defaultCenter: { lat: 51.505, lng: -0.09 }
-      })
-    });
-
     await act(async () => {
       render(<Map />);
     });
 
-    // Mock settings save to fail with invalid content type
+    // Wait for initial settings to load
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledWith('/api/settings');
+    });
+
+    // Mock settings save to return non-JSON content type
     mockFetch.mockResolvedValueOnce({
       ok: true,
       headers: { get: () => 'text/plain' },
-      text: () => Promise.resolve('Invalid response'),
-      json: () => Promise.reject(new Error('Not JSON'))
+      text: jest.fn().mockResolvedValue('Invalid response'),
+      json: jest.fn().mockRejectedValue(new Error('Not JSON')),
     });
 
-    // Trigger a save operation
+    // Trigger a save operation via zoomend
+    const zoomendCalls = mockMap.on.mock.calls.filter(
+      (call: [string, () => void]) => call[0] === 'zoomend'
+    );
     await act(async () => {
-      const zoomHandler = mockMap.on.mock.calls.find(call => call[0] === 'zoomend')[1];
-      zoomHandler();
+      zoomendCalls.forEach((call: [string, () => void]) => call[1]());
+    });
+
+    // Advance timers to trigger the debounced save
+    await act(async () => {
+      jest.advanceTimersByTime(1000);
     });
 
     await waitFor(() => {

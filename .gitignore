@@ -46,3 +46,9 @@ node_modules/
 /playwright-report/
 /blob-report/
 /playwright/.cache/
+
+# Tile data (large, downloaded separately)
+/tiles/
+
+# Generated test reports
+test-report.xml
