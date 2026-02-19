@@ -22,7 +22,6 @@ services:
       db:
         condition: service_healthy
     volumes:
-      - ./prisma:/app/prisma
       - ./tiles:/app/tiles:rw
     networks:
       - internal_net

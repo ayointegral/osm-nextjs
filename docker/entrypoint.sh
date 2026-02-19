@@ -1,6 +1,13 @@
 #!/bin/sh
 set -e
 
+# Ensure tiles directory exists and has placeholder
+mkdir -p /app/tiles
+if [ ! -f /app/tiles/placeholder.png ] && [ -f /app/public/tiles/placeholder.png ]; then
+    cp /app/public/tiles/placeholder.png /app/tiles/placeholder.png
+    echo "Copied placeholder tile to /app/tiles/"
+fi
+
 if [ -z "$DATABASE_URL" ]; then
     echo "ERROR: DATABASE_URL environment variable is not set"
     exit 1
